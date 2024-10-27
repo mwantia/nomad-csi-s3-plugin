@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.22
 ARG GO_IMAGE=mcr.microsoft.com/devcontainers/go
 ARG ALPINE_VERSION=bookworm
 

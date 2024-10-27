@@ -1,0 +1,59 @@
+{
+    "name": "CoreDNS Plugin Development",
+    "dockerComposeFile": "compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspace",
+    "remoteUser": "vscode",
+    "forwardPorts": [
+        "jaeger:16686",
+        "victoriametrics:8428",
+        "minio:9000",
+        "minio:9001"
+    ],
+    "containerUser": "vscode",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "golang.go",
+                "davidanson.vscode-markdownlint",
+                "ms-azuretools.vscode-docker",
+                "ms-vscode.makefile-tools",
+                "vscode-icons-team.vscode-icons",
+                "redhat.vscode-yaml",
+                "usernamehw.indent-one-space",
+                "emmanuelbeziat.vscode-great-icons"
+            ],
+            "settings": {
+                "go.toolsManagement.checkForUpdates": "local",
+                "go.useLanguageServer": true,
+                "go.gopath": "/go",
+                "[go]": {
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "always"
+                    }
+                },
+                "gopls": {
+                    "usePlaceholders": false,
+                    "staticcheck": true,
+                    "formatting.gofumpt": true
+                }
+            }
+        }
+    },
+    "containerEnv": {
+        "LANG": "de_DE.UTF-8"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {
+            "version": "latest",
+            "ppa": "false"
+        },
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "postCreateCommand": "go mod download && go mod tidy",
+    "overrideCommand": true,
+    "mounts": [
+        "source=../,target=/workspace,type=bind",
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    ]
+}

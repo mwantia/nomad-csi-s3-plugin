@@ -1,0 +1,25 @@
+services:
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    command: ["--config", "/config/jaeger.yml"]
+    volumes:
+      - ./jaeger/config.yml:/config/jaeger.yml:ro
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    command: ["--promscrape.config=/config/prometheus.yml"]
+    volumes:
+      - ./victoriametrics/prometheus.yml:/config/prometheus.yml:ro
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: ["server", "/minio/data", "--console-address", ":9001"]
+    volumes:
+      - ./minio:/minio
+
+  devcontainer:
+    build: .
+    depends_on:
+      - jaeger
+      - victoriametrics
+      - minio

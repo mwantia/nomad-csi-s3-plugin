@@ -1,0 +1,52 @@
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter, spanmetrics]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: INFO
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+  jaeger_query:
+    storage:
+      traces: memory_storage
+      metrics: vmcluster_metrics_storage
+  jaeger_storage:
+    backends:
+      memory_storage:
+        memory: 
+          max_traces: 100000
+    metric_backends:
+      vmcluster_metrics_storage:
+        prometheus:
+          endpoint: http://victoriametrics:8428
+          normalize_calls: true
+          normalize_duration: true
+
+connectors:
+  spanmetrics:
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+        endpoint: "0.0.0.0:4318"
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: memory_storage
+  prometheus:
+    endpoint: "0.0.0.0:8889"

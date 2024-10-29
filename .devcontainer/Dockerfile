@@ -6,7 +6,7 @@ FROM ${GO_IMAGE}:${GO_VERSION}-${ALPINE_VERSION}
 
 # Install dependencies
 RUN apt update \
-    && apt install -yqq jq \
+    && apt install -yqq jq s3fs \
     && apt clean -yqq
 
 # Update non-root user

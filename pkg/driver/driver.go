@@ -1,9 +1,15 @@
 package driver
 
 import (
+	"context"
+	"log"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Driver struct {
@@ -22,7 +28,7 @@ var (
 func New(node string, endpoint string) (*Driver, error) {
 	d := csicommon.NewCSIDriver(DriverName, VendorVersion, node)
 	if d == nil {
-		glog.Fatalln("Failed to initialize CSI driver '%s' with version '%s' on node '%s' and endpoint '%s'",
+		log.Fatalf("Failed to initialize CSI driver '%s' with version '%s' on node '%s' and endpoint '%s'",
 			DriverName, VendorVersion, node, endpoint)
 	}
 
@@ -47,15 +53,30 @@ func (d *Driver) NewControllerServer() *ControllerServer {
 func (d *Driver) NewNodeServer() *Nodeserver {
 	return &Nodeserver{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.Driver),
+		Mutexes:           common.NewKeyMutex(32),
 	}
 }
 
-func (d *Driver) Run() {
-	glog.Info("Driver: %s", DriverName)
-	glog.Info("Version: %s", VendorVersion)
+func (d *Driver) Run(ctx context.Context) error {
+	log.Printf("Driver: %s", DriverName)
+	log.Printf("Version: %s", VendorVersion)
 
-	d.Driver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME})
-	d.Driver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER})
+	_, span := otel.Tracer(DriverName).Start(ctx, "Run",
+		trace.WithAttributes(
+			attribute.String("driver.name", DriverName),
+			attribute.String("driver.version", VendorVersion),
+		),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+	defer span.End()
+
+	d.Driver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+	})
+	d.Driver.AddVolumeCapabilityAccessModes([]csi.VolumeCapability_AccessMode_Mode{
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+	})
 
 	d.IdentityServer = d.NewIdentityServer()
 	d.NodeServer = d.NewNodeServer()
@@ -64,4 +85,6 @@ func (d *Driver) Run() {
 	server := csicommon.NewNonBlockingGRPCServer()
 	server.Start(d.Endpoint, d.IdentityServer, d.ControllerServer, d.NodeServer)
 	server.Wait()
+
+	return nil
 }

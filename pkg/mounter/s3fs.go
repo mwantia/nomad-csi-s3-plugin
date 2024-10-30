@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 
+	cmount "github.com/mwantia/nomad-csi-s3-plugin/pkg/common/mount"
+
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
 	"k8s.io/utils/mount"
 )
@@ -56,13 +58,23 @@ func (s *S3FSMounter) Unstage(ctx context.Context, stagePath string) error {
 }
 
 func (s *S3FSMounter) Mount(ctx context.Context, source string, target string) error {
-	return FuseMount(ctx, target, "bindfs", []string{
-		source,
-		target,
-	})
+	return cmount.BindFSMount(ctx, source, target)
+	// return FuseMount(ctx, target, "bindfs", []string{ source,target})
 }
 
 func (s *S3FSMounter) Unmount(ctx context.Context, target string) error {
+	mounted, err := cmount.IsBindMounted(target)
+	if err != nil {
+		return fmt.Errorf("failed to check mount type: %w", err)
+	}
+
+	if mounted {
+		if err := cmount.UnmountBindFS(ctx, target); err != nil {
+			return fmt.Errorf("failed to unmount bindfs: %w", err)
+		}
+		return nil
+	}
+
 	if err := mount.CleanupMountPoint(target, mount.New(""), true); err != nil {
 		return err
 	}

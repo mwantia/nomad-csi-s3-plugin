@@ -114,8 +114,3 @@ func CheckMount(path string) (bool, error) {
 
 	return isMounted, nil
 }
-
-func WaitForMount(ctx context.Context, path string, timeout time.Duration) error {
-	verifier := NewMountVerifier()
-	return verifier.WaitForMount(ctx, path)
-}

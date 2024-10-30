@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	mverify "github.com/mwantia/nomad-csi-s3-plugin/pkg/common/mount"
+
 	"github.com/mitchellh/go-ps"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
 	"k8s.io/utils/mount"
@@ -50,7 +52,8 @@ func FuseMount(ctx context.Context, path, command string, args []string) error {
 		return fmt.Errorf("error fuseMount command: %s\nargs: %s\noutput", command, args)
 	}
 
-	return WaitForMount(ctx, path, 10*time.Second)
+	verifier := mverify.NewMountVerifier()
+	return verifier.WaitForMount(ctx, path)
 }
 
 func FuseUnmount(ctx context.Context, path string) error {

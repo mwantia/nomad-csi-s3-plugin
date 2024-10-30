@@ -7,27 +7,22 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/controller"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/identity"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/node"
 )
 
 type Driver struct {
 	Driver           *csicommon.CSIDriver
 	Endpoint         string
-	IdentityServer   *IdentityServer
-	NodeServer       *Nodeserver
-	ControllerServer *ControllerServer
+	IdentityServer   *identity.IdentityServer
+	NodeServer       *node.Nodeserver
+	ControllerServer *controller.ControllerServer
 }
 
 var (
-	VendorVersion      = "v1.0.1"
-	DriverName         = "github.com.mwantia.nomad-csi-s3-plugin"
-	VolumeCapabilities = []csi.VolumeCapability_AccessMode{
-		{
-			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-		},
-		{
-			Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
-		},
-	}
+	VendorVersion = "v1.0.1"
+	DriverName    = "github.com.mwantia.nomad-csi-s3-plugin"
 )
 
 func New(node string, endpoint string) (*Driver, error) {
@@ -43,20 +38,20 @@ func New(node string, endpoint string) (*Driver, error) {
 	}, nil
 }
 
-func (d *Driver) NewIdentityServer() *IdentityServer {
-	return &IdentityServer{
+func (d *Driver) NewIdentityServer() *identity.IdentityServer {
+	return &identity.IdentityServer{
 		DefaultIdentityServer: csicommon.NewDefaultIdentityServer(d.Driver),
 	}
 }
 
-func (d *Driver) NewControllerServer() *ControllerServer {
-	return &ControllerServer{
+func (d *Driver) NewControllerServer() *controller.ControllerServer {
+	return &controller.ControllerServer{
 		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.Driver),
 	}
 }
 
-func (d *Driver) NewNodeServer() *Nodeserver {
-	return &Nodeserver{
+func (d *Driver) NewNodeServer() *node.Nodeserver {
+	return &node.Nodeserver{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.Driver),
 		Mutexes:           common.NewKeyMutex(32),
 	}

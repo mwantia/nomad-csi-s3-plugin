@@ -1,4 +1,4 @@
-package driver
+package identity
 
 import (
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"

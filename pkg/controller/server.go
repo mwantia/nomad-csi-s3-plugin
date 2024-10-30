@@ -1,4 +1,4 @@
-package driver
+package controller
 
 import (
 	"context"
@@ -18,6 +18,15 @@ import (
 const (
 	DefaultFsPath = "csi-fs"
 )
+
+var VolumeCapabilities = []csi.VolumeCapability_AccessMode{
+	{
+		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+	},
+	{
+		Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+	},
+}
 
 type ControllerServer struct {
 	*csicommon.DefaultControllerServer

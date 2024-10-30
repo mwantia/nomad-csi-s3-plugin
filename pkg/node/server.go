@@ -1,4 +1,4 @@
-package driver
+package node
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/mount"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/mounter"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
 	"google.golang.org/grpc/codes"
@@ -17,8 +18,10 @@ import (
 
 type Nodeserver struct {
 	*csicommon.DefaultNodeServer
-	Volumes sync.Map
-	Mutexes *common.KeyMutex
+	Volumes    sync.Map
+	Mutexes    *common.KeyMutex
+	Verifiers  map[string]*mount.MountVerifier
+	VerifierMu sync.Mutex
 }
 
 func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
@@ -108,20 +111,23 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
 	}
 
-	if len(req.GetVolumeId()) == 0 {
+	volumeid := req.GetVolumeId()
+	stagingpath := req.GetStagingTargetPath()
+
+	if len(volumeid) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
-	if len(req.GetStagingTargetPath()) == 0 {
+	if len(stagingpath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Staging target path missing in request")
 	}
 
-	mutex := n.GetVolumeMutex(req.GetVolumeId())
+	mutex := n.GetVolumeMutex(volumeid)
 
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	isMountable, err := common.CheckMount(req.GetStagingTargetPath())
+	isMountable, err := common.CheckMount(stagingpath)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +141,7 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, err
 	}
 
-	bucketName, prefix := common.VolumeIDToBucketPrefix(req.GetVolumeId())
+	bucketName, prefix := common.VolumeIDToBucketPrefix(volumeid)
 	meta, err := minio.GetFSMeta(ctx, bucketName, prefix)
 	if err != nil {
 		return nil, err
@@ -146,44 +152,48 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return nil, err
 	}
 
-	volume := NewVolume(req.GetVolumeId(), mounter)
+	volume := NewVolume(volumeid, mounter)
 
-	if err := volume.Stage(ctx, req.GetStagingTargetPath()); err != nil {
+	if err := volume.Stage(ctx, stagingpath); err != nil {
 		return nil, err
 	}
 
-	n.Volumes.Store(req.GetVolumeId(), volume)
-	log.Printf("volume %s successfully staged to %s", req.GetVolumeId(), req.GetStagingTargetPath())
+	n.Volumes.Store(volumeid, volume)
+	log.Printf("volume %s successfully staged to %s", volumeid, stagingpath)
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 func (n *Nodeserver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	if len(req.GetVolumeId()) == 0 {
+	volumeid := req.GetVolumeId()
+	stagingpath := req.GetStagingTargetPath()
+
+	if len(volumeid) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
-	if len(req.GetStagingTargetPath()) == 0 {
+	if len(stagingpath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Staging target path missing in request")
 	}
 
-	mutex := n.GetVolumeMutex(req.GetVolumeId())
+	mutex := n.GetVolumeMutex(volumeid)
 
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	volume, ok := n.Volumes.Load(req.GetVolumeId())
+	volume, ok := n.Volumes.Load(volumeid)
 	if !ok {
-		log.Printf("volume %s hasn't been staged yet", req.GetVolumeId())
+		log.Printf("volume %s hasn't been staged yet", volumeid)
 
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
-	if err := volume.(*Volume).Unstage(ctx, req.GetStagingTargetPath()); err != nil {
+	if err := volume.(*Volume).Unstage(ctx, stagingpath); err != nil {
 		return nil, err
 	}
 
-	n.Volumes.Delete(req.GetVolumeId())
+	n.Volumes.Delete(volumeid)
+
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 

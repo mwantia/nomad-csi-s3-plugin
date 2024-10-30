@@ -53,9 +53,9 @@ func (s *S3FSMounter) Stage(ctx context.Context, stagePath string) error {
 	return FuseMount(ctx, stagePath, "s3fs", []string{
 		fmt.Sprintf("%s:/%s", s.Meta.BucketName, path.Join(s.Meta.Prefix, s.Meta.FSPath)),
 		stagePath,
-		"-o", fmt.Sprintf("url=\"%s\"", s.Cfg.Endpoint),
-		"-o", fmt.Sprintf("endpoint=\"%s\"", s.Cfg.Region),
-		"-o", fmt.Sprintf("passwd_file=\"%s\"", passfile),
+		"-o", fmt.Sprintf("url=%s", s.Cfg.Endpoint),
+		"-o", fmt.Sprintf("endpoint=%s", s.Cfg.Region),
+		"-o", fmt.Sprintf("passwd_file=%s", passfile),
 		"-o", "use_path_request_style",
 		"-o", "allow_other",
 		"-o", "mp_umask=000",

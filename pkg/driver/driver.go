@@ -18,7 +18,7 @@ type Driver struct {
 }
 
 var (
-	VendorVersion      = "v1.2.0-rc.2"
+	VendorVersion      = "v1.0.0"
 	DriverName         = "github.com.mwantia.nomad-csi-s3-plugin"
 	VolumeCapabilities = []csi.VolumeCapability_AccessMode{
 		{

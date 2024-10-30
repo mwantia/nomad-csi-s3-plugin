@@ -47,7 +47,7 @@ func (vol *Volume) Stage(ctx context.Context, path string) error {
 	}
 
 	if err := vol.mounter.Stage(ctx, path); err != nil {
-		return common.HandleInternalError(err, span)
+		return common.HandleError(err, span)
 	}
 
 	vol.stagingTargetPath = path
@@ -71,7 +71,7 @@ func (vol *Volume) Unstage(ctx context.Context, path string) error {
 	}
 
 	if err := vol.mounter.Unstage(ctx, vol.stagingTargetPath); err != nil {
-		return common.HandleInternalError(err, span)
+		return common.HandleError(err, span)
 	}
 
 	return nil
@@ -87,7 +87,7 @@ func (vol *Volume) Publish(ctx context.Context, path string) error {
 	defer span.End()
 
 	if err := vol.mounter.Mount(ctx, vol.stagingTargetPath, path); err != nil {
-		return common.HandleInternalError(err, span)
+		return common.HandleError(err, span)
 	}
 
 	vol.targetPaths[path] = true
@@ -109,7 +109,7 @@ func (vol *Volume) Unpublish(ctx context.Context, path string) error {
 	}
 
 	if err := vol.mounter.Unmount(ctx, path); err != nil {
-		return common.HandleInternalError(err, span)
+		return common.HandleError(err, span)
 	}
 
 	delete(vol.targetPaths, path)

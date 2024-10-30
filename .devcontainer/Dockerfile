@@ -9,6 +9,8 @@ RUN apt update \
     && apt install -yqq jq s3fs \
     && apt clean -yqq
 
+RUN echo "user_allow_other" >> /etc/fuse.conf
+
 # Update non-root user
 ARG USERNAME=vscode
 ARG USER_UID=1000

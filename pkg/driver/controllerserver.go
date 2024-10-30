@@ -35,6 +35,8 @@ func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
 	volumeID := common.SanitizeVolumeID(req.GetName())
 
 	if len(volumeID) == 0 {
@@ -72,7 +74,8 @@ func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	if err := c.Driver.ValidateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		log.Printf("invalid create volume req: %v", req)
-		return nil, common.HandleInternalError(err, span)
+
+		return nil, common.HandleError(err, span)
 	}
 
 	log.Printf("Got a request to create volume %s", volumeID)
@@ -88,16 +91,12 @@ func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	client, err := s3.NewClientFromSecret(req.GetSecrets())
 	if err != nil {
-		err := fmt.Errorf("failed to initialize S3 client: %s", err)
-
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(fmt.Errorf("failed to initialize S3 client: %s", err), span)
 	}
 
 	exists, err := client.BucketExists(ctx, bucketName)
 	if err != nil {
-		err := fmt.Errorf("failed to check if bucket %s exists: %v", volumeID, err)
-
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(fmt.Errorf("failed to check if bucket %s exists: %v", volumeID, err), span)
 	}
 
 	if exists {
@@ -108,26 +107,24 @@ func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			if capacityBytes > m.CapacityBytes {
 				err := status.Error(codes.AlreadyExists, fmt.Sprintf("Volume with the same name: %s but smaller size already exist", volumeID))
 
-				return nil, common.HandleInternalError(err, span)
+				return nil, common.HandleError(err, span)
 			}
 		}
 	} else {
 		if err = client.CreateBucket(ctx, bucketName); err != nil {
-			err := fmt.Errorf("failed to create bucket %s: %v", bucketName, err)
-
-			return nil, common.HandleInternalError(err, span)
+			return nil, common.HandleError(fmt.Errorf("failed to create bucket %s: %v", bucketName, err), span)
 		}
 	}
 
 	if err = client.CreatePrefix(ctx, bucketName, path.Join(prefix, defaultFsPath)); err != nil && prefix != "" {
 		err := fmt.Errorf("failed to create prefix %s: %v", path.Join(prefix, defaultFsPath), err)
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	if err := client.SetFSMeta(ctx, meta); err != nil {
 		err := fmt.Errorf("error setting bucket metadata: %w", err)
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	log.Printf("create volume %s", volumeID)
@@ -150,6 +147,11 @@ func (c *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
+	volumeid := req.GetVolumeId()
+	log.Printf("VolumeID: '%s'", volumeid)
+
 	if len(req.GetVolumeId()) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume ID missing in request", span)
 	}
@@ -160,7 +162,7 @@ func (c *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	if err := c.Driver.ValidateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		log.Printf("Invalid delete volume req: %v", req)
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	log.Printf("Deleting volume %s", req.GetVolumeId())
@@ -169,7 +171,7 @@ func (c *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	if err != nil {
 		err := fmt.Errorf("failed to initialize S3 client: %s", err)
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	if meta, err = client.GetFSMeta(ctx, bucketName, prefix); err != nil {
@@ -205,7 +207,7 @@ func (c *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 			log.Fatalf("%v", err)
 		}
 
-		return nil, common.HandleInternalError(deleteErr, span)
+		return nil, common.HandleError(deleteErr, span)
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
@@ -219,6 +221,8 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
+
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	if len(req.GetVolumeId()) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume ID missing in request", span)
@@ -239,12 +243,12 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 	if err != nil {
 		err := fmt.Errorf("failed to initialize S3 client: %s", err)
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	exists, err := client.BucketExists(ctx, bucketName)
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	span.SetAttributes(attribute.Bool("exists", exists))
@@ -252,13 +256,13 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 	if !exists {
 		err := status.Error(codes.NotFound, fmt.Sprintf("bucket of volume with id %s does not exist", req.GetVolumeId()))
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	if _, err := client.GetFSMeta(ctx, bucketName, prefix); err != nil {
 		err := status.Error(codes.NotFound, fmt.Sprintf("fsmeta of volume with id %s does not exist", req.GetVolumeId()))
 
-		return nil, common.HandleInternalError(err, span)
+		return nil, common.HandleError(err, span)
 	}
 
 	// We currently only support RWO
@@ -291,6 +295,8 @@ func (c *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
+
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	return &csi.ControllerExpandVolumeResponse{}, common.HandleUnimplementedError("ControllerExpandVolume", span)
 }

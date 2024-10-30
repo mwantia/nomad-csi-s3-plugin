@@ -32,6 +32,8 @@ func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
 	if req.GetVolumeCapability() == nil {
 		return nil, common.HandleInvalidArgumentError("Volume capability missing in request", span)
 	}
@@ -95,6 +97,8 @@ func (n *Nodeserver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
 	if len(req.GetVolumeId()) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
 	}
@@ -133,6 +137,8 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
+
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	if req.GetVolumeCapability() == nil {
 		return nil, common.HandleInvalidArgumentError("Volume capability missing in request", span)
@@ -200,6 +206,8 @@ func (n *Nodeserver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
 	if len(req.GetVolumeId()) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
 	}
@@ -235,6 +243,8 @@ func (n *Nodeserver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 	)
 	defer span.End()
 
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
+
 	nscap := &csi.NodeServiceCapability{
 		Type: &csi.NodeServiceCapability_Rpc{
 			Rpc: &csi.NodeServiceCapability_RPC{
@@ -258,6 +268,8 @@ func (n *Nodeserver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVo
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
+
+	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	return &csi.NodeExpandVolumeResponse{}, common.HandleUnimplementedError("NodeExpandVolume", span)
 }

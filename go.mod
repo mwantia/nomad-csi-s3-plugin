@@ -6,9 +6,12 @@ require (
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/golang/glog v1.2.2
 	github.com/minio/minio-go/v7 v7.0.79
+	github.com/onsi/ginkgo v1.10.2
+	github.com/onsi/gomega v1.7.0
 	go.opentelemetry.io/otel/sdk v1.31.0
 	go.opentelemetry.io/otel/trace v1.31.0
 	google.golang.org/grpc v1.67.1
+	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 )
 
 require (
@@ -22,8 +25,6 @@ require (
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/kubernetes-csi/csi-lib-utils v0.7.1 // indirect
 	github.com/moby/sys/mountinfo v0.7.1 // indirect
-	github.com/onsi/ginkgo v1.10.2 // indirect
-	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/opencontainers/runc v1.1.13 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20220909204839-494a5a6aca78 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
@@ -37,7 +38,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.2.4 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
 )
 
 require (

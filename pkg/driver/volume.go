@@ -4,11 +4,7 @@ import (
 	"context"
 
 	"github.com/golang/glog"
-	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/mounter"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type Volume struct {
@@ -31,23 +27,14 @@ func NewVolume(volumeID string, mounter mounter.Mounter) *Volume {
 }
 
 func (vol *Volume) Stage(ctx context.Context, path string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Stage",
-		trace.WithAttributes(
-			attribute.String("path", path),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	staged := vol.IsStaged()
-	span.SetAttributes(attribute.Bool("staged", staged))
 
 	if staged {
 		return nil
 	}
 
 	if err := vol.mounter.Stage(ctx, path); err != nil {
-		return common.HandleError(err, span)
+		return err
 	}
 
 	vol.stagingTargetPath = path
@@ -55,39 +42,22 @@ func (vol *Volume) Stage(ctx context.Context, path string) error {
 }
 
 func (vol *Volume) Unstage(ctx context.Context, path string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Unstage",
-		trace.WithAttributes(
-			attribute.String("path", path),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	staged := vol.IsStaged()
-	span.SetAttributes(attribute.Bool("staged", staged))
 
 	if !staged {
 		return nil
 	}
 
 	if err := vol.mounter.Unstage(ctx, vol.stagingTargetPath); err != nil {
-		return common.HandleError(err, span)
+		return err
 	}
 
 	return nil
 }
 
 func (vol *Volume) Publish(ctx context.Context, path string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Publish",
-		trace.WithAttributes(
-			attribute.String("path", path),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	if err := vol.mounter.Mount(ctx, vol.stagingTargetPath, path); err != nil {
-		return common.HandleError(err, span)
+		return err
 	}
 
 	vol.targetPaths[path] = true
@@ -95,21 +65,13 @@ func (vol *Volume) Publish(ctx context.Context, path string) error {
 }
 
 func (vol *Volume) Unpublish(ctx context.Context, path string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Unpublish",
-		trace.WithAttributes(
-			attribute.String("path", path),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	if _, ok := vol.targetPaths[path]; !ok {
 		glog.Warningf("volume %s hasn't been published to %s", vol.VolumeId, path)
 		return nil
 	}
 
 	if err := vol.mounter.Unmount(ctx, path); err != nil {
-		return common.HandleError(err, span)
+		return err
 	}
 
 	delete(vol.targetPaths, path)

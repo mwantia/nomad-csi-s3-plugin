@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 
@@ -10,9 +11,8 @@ import (
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/mounter"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Nodeserver struct {
@@ -22,40 +22,26 @@ type Nodeserver struct {
 }
 
 func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodePublishVolume",
-		trace.WithAttributes(
-			attribute.String("volumeid", req.GetVolumeId()),
-			attribute.String("stagingtargetpath", req.GetStagingTargetPath()),
-			attribute.String("targetpath", req.GetTargetPath()),
-		),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
 	if req.GetVolumeCapability() == nil {
-		return nil, common.HandleInvalidArgumentError("Volume capability missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
 	}
 
 	if len(req.GetVolumeId()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
 	if len(req.GetStagingTargetPath()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Staging target path missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Staging target path missing in request")
 	}
 
 	if len(req.GetTargetPath()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Target path missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
 	isMountable, err := common.CheckMount(req.GetTargetPath())
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
-
-	span.SetAttributes(attribute.Bool("checkmount", isMountable))
 
 	if !isMountable {
 		return &csi.NodePublishVolumeResponse{}, nil
@@ -66,7 +52,7 @@ func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		deviceID = req.GetPublishContext()[deviceID]
 	}
 
-	span.SetAttributes(attribute.String("deviceid", deviceID))
+	log.Printf("DeviceID: %s", deviceID)
 
 	mutex := n.GetVolumeMutex(req.GetVolumeId())
 
@@ -75,11 +61,11 @@ func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 
 	volume, ok := n.Volumes.Load(req.GetVolumeId())
 	if !ok {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	if err := volume.(*Volume).Publish(ctx, req.GetTargetPath()); err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	log.Printf("volume %s successfuly mounted to %s", req.GetVolumeId(), req.GetTargetPath())
@@ -88,23 +74,12 @@ func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 }
 
 func (n *Nodeserver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodeUnpublishVolume",
-		trace.WithAttributes(
-			attribute.String("volumeid", req.GetVolumeId()),
-			attribute.String("targetpath", req.GetTargetPath()),
-		),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
 	if len(req.GetVolumeId()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
 	if len(req.GetTargetPath()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Target path missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
 	mutex := n.GetVolumeMutex(req.GetVolumeId())
@@ -120,7 +95,7 @@ func (n *Nodeserver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	}
 
 	if err := volume.(*Volume).Unpublish(ctx, req.GetTargetPath()); err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	log.Printf("volume %s has been unpublished from %s", req.GetVolumeId(), req.GetTargetPath())
@@ -129,27 +104,16 @@ func (n *Nodeserver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 }
 
 func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodeStageVolume",
-		trace.WithAttributes(
-			attribute.String("volumeid", req.GetVolumeId()),
-			attribute.String("stagingtargetpath", req.GetStagingTargetPath()),
-		),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
 	if req.GetVolumeCapability() == nil {
-		return nil, common.HandleInvalidArgumentError("Volume capability missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
 	}
 
 	if len(req.GetVolumeId()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
 	if len(req.GetStagingTargetPath()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Staging Target path missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Staging target path missing in request")
 	}
 
 	mutex := n.GetVolumeMutex(req.GetVolumeId())
@@ -159,10 +123,8 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	isMountable, err := common.CheckMount(req.GetStagingTargetPath())
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
-
-	span.SetAttributes(attribute.Bool("checkmount", isMountable))
 
 	if !isMountable {
 		return &csi.NodeStageVolumeResponse{}, nil
@@ -170,24 +132,24 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	minio, err := s3.NewClientFromSecret(req.GetSecrets())
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	bucketName, prefix := common.VolumeIDToBucketPrefix(req.GetVolumeId())
 	meta, err := minio.GetFSMeta(ctx, bucketName, prefix)
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	mounter, err := mounter.NewMounter(meta, minio.Config)
 	if err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	volume := NewVolume(req.GetVolumeId(), mounter)
 
 	if err := volume.Stage(ctx, req.GetStagingTargetPath()); err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	n.Volumes.Store(req.GetVolumeId(), volume)
@@ -197,23 +159,12 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 }
 
 func (n *Nodeserver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodeUnstageVolume",
-		trace.WithAttributes(
-			attribute.String("volumeid", req.GetVolumeId()),
-			attribute.String("stagingtargetpath", req.GetStagingTargetPath()),
-		),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
 	if len(req.GetVolumeId()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Volume-ID missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "VolumeID missing in request")
 	}
 
 	if len(req.GetStagingTargetPath()) == 0 {
-		return nil, common.HandleInvalidArgumentError("Staging target path missing in request", span)
+		return nil, status.Error(codes.InvalidArgument, "Staging target path missing in request")
 	}
 
 	mutex := n.GetVolumeMutex(req.GetVolumeId())
@@ -229,7 +180,7 @@ func (n *Nodeserver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	}
 
 	if err := volume.(*Volume).Unstage(ctx, req.GetStagingTargetPath()); err != nil {
-		return nil, common.HandleInternalError(err, span)
+		return nil, err
 	}
 
 	n.Volumes.Delete(req.GetVolumeId())
@@ -237,14 +188,6 @@ func (n *Nodeserver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 }
 
 func (n *Nodeserver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	_, span := otel.Tracer(DriverName).Start(ctx, "NodeGetCapabilities",
-		trace.WithAttributes(),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
 	nscap := &csi.NodeServiceCapability{
 		Type: &csi.NodeServiceCapability_Rpc{
 			Rpc: &csi.NodeServiceCapability_RPC{
@@ -261,17 +204,7 @@ func (n *Nodeserver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCa
 }
 
 func (n *Nodeserver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	_, span := otel.Tracer(DriverName).Start(ctx, "NodeExpandVolume",
-		trace.WithAttributes(
-			attribute.String("volumeid", req.GetVolumeId()),
-		),
-		trace.WithSpanKind(trace.SpanKindServer),
-	)
-	defer span.End()
-
-	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
-
-	return &csi.NodeExpandVolumeResponse{}, common.HandleUnimplementedError("NodeExpandVolume", span)
+	return &csi.NodeExpandVolumeResponse{}, status.Error(codes.Unimplemented, fmt.Sprintf("%s is not implemented", "NodeExpandVolume"))
 }
 
 func (n *Nodeserver) GetVolumeMutex(volumeID string) *sync.RWMutex {

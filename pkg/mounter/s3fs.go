@@ -7,11 +7,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"k8s.io/utils/mount"
 )
 
@@ -29,26 +25,10 @@ func NewS3FSMounter(meta *s3.FSMeta, cfg *s3.S3Config) (Mounter, error) {
 
 // Stage implements Mounter.
 func (s *S3FSMounter) Stage(ctx context.Context, stagePath string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Stage",
-		trace.WithAttributes(
-			attribute.String("type", "s3fs"),
-			attribute.String("stagepath", stagePath),
-			attribute.String("endpoint", s.Cfg.Endpoint),
-			attribute.String("region", s.Cfg.Region),
-			attribute.String("bucketname", s.Meta.BucketName),
-			attribute.String("prefix", s.Meta.Prefix),
-			attribute.String("fspath", s.Meta.FSPath),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	passfile, err := WriteS3FSPassFile(s.Cfg.AccessKeyID + ":" + s.Cfg.SecretAccessKey)
 	if err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
-
-	span.SetAttributes(attribute.String("passfile", passfile))
 
 	return FuseMount(ctx, stagePath, "s3fs", []string{
 		fmt.Sprintf("%s:/%s", s.Meta.BucketName, path.Join(s.Meta.Prefix, s.Meta.FSPath)),
@@ -64,74 +44,27 @@ func (s *S3FSMounter) Stage(ctx context.Context, stagePath string) error {
 
 // Unstage implements Mounter.
 func (s *S3FSMounter) Unstage(ctx context.Context, stagePath string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Unstage",
-		trace.WithAttributes(
-			attribute.String("type", "s3fs"),
-			attribute.String("stagepath", stagePath),
-			attribute.String("endpoint", s.Cfg.Endpoint),
-			attribute.String("region", s.Cfg.Region),
-			attribute.String("bucketname", s.Meta.BucketName),
-			attribute.String("prefix", s.Meta.Prefix),
-			attribute.String("fspath", s.Meta.FSPath),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	if err := FuseUnmount(ctx, stagePath); err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	if err := os.Remove(stagePath); err != nil && !os.IsNotExist(err) {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	return nil
 }
 
 func (s *S3FSMounter) Mount(ctx context.Context, source string, target string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "Mount",
-		trace.WithAttributes(
-			attribute.String("type", "s3fs"),
-			attribute.String("source", source),
-			attribute.String("target", target),
-			attribute.String("endpoint", s.Cfg.Endpoint),
-			attribute.String("region", s.Cfg.Region),
-			attribute.String("bucketname", s.Meta.BucketName),
-			attribute.String("prefix", s.Meta.Prefix),
-			attribute.String("fspath", s.Meta.FSPath),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	return FuseMount(ctx, target, "bindfs", []string{
 		source,
 		target,
 	})
-
-	/* if err := mount.New("").Mount(source, target, "", []string{}); err != nil {
-		return common.HandleInternalError(err, span)
-	} */
 }
 
 func (s *S3FSMounter) Unmount(ctx context.Context, target string) error {
-	_, span := otel.Tracer(DriverName).Start(ctx, "Unmount",
-		trace.WithAttributes(
-			attribute.String("type", "s3fs"),
-			attribute.String("target", target),
-			attribute.String("endpoint", s.Cfg.Endpoint),
-			attribute.String("region", s.Cfg.Region),
-			attribute.String("bucketname", s.Meta.BucketName),
-			attribute.String("prefix", s.Meta.Prefix),
-			attribute.String("fspath", s.Meta.FSPath),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
-
 	if err := mount.CleanupMountPoint(target, mount.New(""), true); err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	return nil

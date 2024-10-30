@@ -6,22 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"path"
 
-	"github.com/golang/glog"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
-	MetadataName  = ".metadata.json"
-	VendorVersion = "v1.2.0-rc.2"
-	DriverName    = "github.com.mwantia.nomad-csi-s3-plugin"
+	MetadataName = ".metadata.json"
 )
 
 type S3Client struct {
@@ -81,132 +75,67 @@ func NewClientFromSecret(secret map[string]string) (*S3Client, error) {
 }
 
 func (c *S3Client) BucketExists(ctx context.Context, bucketName string) (bool, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "BucketExists",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	exists, err := c.Minio.BucketExists(ctx, bucketName)
-	span.SetAttributes(attribute.Bool("exists", exists))
-
 	if err != nil {
-		return false, common.HandleInternalError(err, span)
+		return false, err
 	}
 
 	return exists, nil
 }
 
 func (c *S3Client) CreateBucket(ctx context.Context, bucketName string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "CreateBucket",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	err := c.Minio.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{
 		Region: c.Config.Region,
 	})
 	if err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	return nil
 }
 
 func (c *S3Client) CreatePrefix(ctx context.Context, bucketName string, prefix string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "CreatePrefix",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-			attribute.String("prefix", prefix),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	_, err := c.Minio.PutObject(ctx, bucketName, prefix+"/", bytes.NewReader([]byte("")), 0, minio.PutObjectOptions{})
 	if err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	return nil
 }
 
 func (c *S3Client) RemovePrefix(ctx context.Context, bucketName string, prefix string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "RemovePrefix",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-			attribute.String("prefix", prefix),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	var err error
 
 	if err = c.RemoveObjects(ctx, bucketName, prefix); err == nil {
 		return c.Minio.RemoveObject(ctx, bucketName, prefix, minio.RemoveObjectOptions{})
 	}
 
-	glog.Warningf("removeObjects failed with: %s", err)
+	log.Printf("removeObjects failed with: %s", err)
 
 	if err = c.RemoveObjectsOneByOne(ctx, bucketName, prefix); err == nil {
 		return c.Minio.RemoveObject(ctx, bucketName, prefix, minio.RemoveObjectOptions{})
 	}
 
-	return common.HandleInternalError(err, span)
+	return err
 }
 
 func (c *S3Client) RemoveBucket(ctx context.Context, bucketName string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "RemoveBucket",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	var err error
 
 	if err = c.RemoveObjects(ctx, bucketName, ""); err == nil {
 		return c.Minio.RemoveBucket(ctx, bucketName)
 	}
 
-	glog.Warningf("removeObjects failed with: %s, will try removeObjectsOneByOne", err)
+	log.Printf("removeObjects failed with: %s, will try removeObjectsOneByOne", err)
 
 	if err = c.RemoveObjectsOneByOne(ctx, bucketName, ""); err == nil {
 		return c.Minio.RemoveBucket(ctx, bucketName)
 	}
 
-	return common.HandleInternalError(err, span)
+	return err
 }
 
 func (c *S3Client) RemoveObjects(ctx context.Context, bucketName, prefix string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "RemoveObjects",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-			attribute.String("prefix", prefix),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	objectsCh := make(chan minio.ObjectInfo)
 	var err error
 
@@ -226,9 +155,7 @@ func (c *S3Client) RemoveObjects(ctx context.Context, bucketName, prefix string)
 	}()
 
 	if err != nil {
-		glog.Error("Error listing objects", err)
-
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	opts := minio.RemoveObjectsOptions{
@@ -237,31 +164,18 @@ func (c *S3Client) RemoveObjects(ctx context.Context, bucketName, prefix string)
 	errorCh := c.Minio.RemoveObjects(ctx, bucketName, objectsCh, opts)
 	haveErrWhenRemoveObjects := false
 	for e := range errorCh {
-		glog.Errorf("Failed to remove object %s, error: %s", e.ObjectName, e.Err)
+		log.Printf("Failed to remove object %s, error: %s", e.ObjectName, e.Err)
 		haveErrWhenRemoveObjects = true
 	}
 
 	if haveErrWhenRemoveObjects {
-		err := fmt.Errorf("failed to remove all objects of bucket %s", bucketName)
-
-		return common.HandleInternalError(err, span)
+		return fmt.Errorf("failed to remove all objects of bucket %s", bucketName)
 	}
 
 	return nil
 }
 
 func (c *S3Client) RemoveObjectsOneByOne(ctx context.Context, bucketName, prefix string) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "RemoveObjectsOneByOne",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", bucketName),
-			attribute.String("prefix", prefix),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	objectsCh := make(chan minio.ObjectInfo, 1)
 	removeErrCh := make(chan minio.RemoveObjectError, 1)
 	var err error
@@ -280,9 +194,7 @@ func (c *S3Client) RemoveObjectsOneByOne(ctx context.Context, bucketName, prefix
 	}()
 
 	if err != nil {
-		glog.Error("Error listing objects", err)
-
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	go func() {
@@ -303,86 +215,55 @@ func (c *S3Client) RemoveObjectsOneByOne(ctx context.Context, bucketName, prefix
 
 	haveErrWhenRemoveObjects := false
 	for e := range removeErrCh {
-		glog.Errorf("Failed to remove object %s, error: %s", e.ObjectName, e.Err)
+		log.Printf("Failed to remove object %s, error: %s", e.ObjectName, e.Err)
 		haveErrWhenRemoveObjects = true
 	}
 	if haveErrWhenRemoveObjects {
-		err := fmt.Errorf("failed to remove all objects of path %s", bucketName)
-
-		return common.HandleInternalError(err, span)
+		return fmt.Errorf("failed to remove all objects of path %s", bucketName)
 	}
 
 	return nil
 }
 
 func (c *S3Client) SetFSMeta(ctx context.Context, meta *FSMeta) error {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "SetFSMeta",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketname", meta.BucketName),
-			attribute.String("prefix", meta.Prefix),
-			attribute.String("fspath", meta.FSPath),
-			attribute.String("path", path.Join(meta.Prefix, MetadataName)),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	b := new(bytes.Buffer)
 	json.NewEncoder(b).Encode(meta)
 	opts := minio.PutObjectOptions{ContentType: "application/json"}
 	_, err := c.Minio.PutObject(ctx, meta.BucketName, path.Join(meta.Prefix, MetadataName), b, int64(b.Len()), opts)
 	if err != nil {
-		return common.HandleInternalError(err, span)
+		return err
 	}
 
 	return nil
 }
 
 func (c *S3Client) GetFSMeta(ctx context.Context, bucketName, prefix string) (*FSMeta, error) {
-	ctx, span := otel.Tracer(DriverName).Start(ctx, "GetFSMeta",
-		trace.WithAttributes(
-			attribute.String("endpoint", c.Config.Endpoint),
-			attribute.String("region", c.Config.Region),
-			attribute.String("bucketName", bucketName),
-			attribute.String("path", path.Join(prefix, MetadataName)),
-		),
-		trace.WithSpanKind(trace.SpanKindClient),
-	)
-	defer span.End()
-
 	opts := minio.GetObjectOptions{}
 	obj, err := c.Minio.GetObject(ctx, bucketName, path.Join(prefix, MetadataName), opts)
 	if err != nil {
-		return &FSMeta{}, common.HandleError(err, span)
+		return &FSMeta{}, err
 	}
 
 	objInfo, err := obj.Stat()
 	if err != nil {
-		return &FSMeta{}, common.HandleError(err, span)
+		return &FSMeta{}, err
 	}
 
-	span.SetAttributes(attribute.Int64("objsize", objInfo.Size))
-
 	if objInfo.Size <= 0 {
-		return &FSMeta{}, common.HandleError(fmt.Errorf("invalid size defined for object"), span)
+		return &FSMeta{}, fmt.Errorf("invalid size defined for object")
 	}
 
 	b := make([]byte, objInfo.Size)
 	_, err = obj.Read(b)
 
 	if err != nil && err != io.EOF {
-		return &FSMeta{}, common.HandleError(err, span)
+		return &FSMeta{}, err
 	}
 
 	var meta FSMeta
 	err = json.Unmarshal(b, &meta)
-
-	span.SetAttributes(attribute.String("fspath", meta.FSPath))
-
 	if err != nil {
-		return &FSMeta{}, common.HandleError(err, span)
+		return &FSMeta{}, err
 	}
 
 	return &meta, nil

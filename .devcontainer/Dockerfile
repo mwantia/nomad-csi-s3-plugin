@@ -6,7 +6,7 @@ FROM ${GO_IMAGE}:${GO_VERSION}-${ALPINE_VERSION}
 
 # Install dependencies
 RUN apt update \
-    && apt install -yqq jq s3fs \
+    && apt install -yqq jq s3fs libfuse3-dev \
     && apt clean -yqq
 
 RUN echo "user_allow_other" >> /etc/fuse.conf

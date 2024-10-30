@@ -22,7 +22,7 @@ type Nodeserver struct {
 }
 
 func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	_, span := otel.Tracer(DriverName).Start(ctx, "NodePublishVolume",
+	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodePublishVolume",
 		trace.WithAttributes(
 			attribute.String("volumeid", req.GetVolumeId()),
 			attribute.String("stagingtargetpath", req.GetStagingTargetPath()),
@@ -129,7 +129,7 @@ func (n *Nodeserver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 }
 
 func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	_, span := otel.Tracer(DriverName).Start(ctx, "NodeStageVolume",
+	ctx, span := otel.Tracer(DriverName).Start(ctx, "NodeStageVolume",
 		trace.WithAttributes(
 			attribute.String("volumeid", req.GetVolumeId()),
 			attribute.String("stagingtargetpath", req.GetStagingTargetPath()),

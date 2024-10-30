@@ -2,6 +2,7 @@ package common
 
 import (
 	"os"
+	"os/exec"
 
 	"k8s.io/mount-utils"
 )
@@ -20,6 +21,19 @@ func CheckMount(path string) (bool, error) {
 	}
 
 	return isMounted, nil
+}
+
+func MoundBindFS(source, target string) error {
+	args := []string{
+		source,
+		target,
+	}
+	cmd := exec.Command("bindfs", args...)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return nil
 }
 
 func CleanupMountPoint(mountPath string) error {

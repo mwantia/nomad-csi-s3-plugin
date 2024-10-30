@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"os"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/driver"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/otel"
 )
@@ -42,12 +42,12 @@ func main() {
 			BatchSize:    10,
 		})
 		if err != nil {
-			glog.Errorln("Unable to setup opentelemetry: %v", err)
+			log.Printf("Unable to setup opentelemetry: %v", err)
 		}
 	}
 
 	if err = d.Run(ctx); err != nil {
-		glog.Errorln("Unable to start driver: %v", err)
+		log.Printf("Unable to start driver: %v", err)
 	}
 
 	if *OtelEnable {

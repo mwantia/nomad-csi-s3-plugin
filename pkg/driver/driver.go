@@ -7,9 +7,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type Driver struct {
@@ -21,8 +18,16 @@ type Driver struct {
 }
 
 var (
-	VendorVersion = "v1.2.0-rc.2"
-	DriverName    = "github.com.mwantia.nomad-csi-s3-plugin"
+	VendorVersion      = "v1.2.0-rc.2"
+	DriverName         = "github.com.mwantia.nomad-csi-s3-plugin"
+	VolumeCapabilities = []csi.VolumeCapability_AccessMode{
+		{
+			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		},
+		{
+			Mode: csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+		},
+	}
 )
 
 func New(node string, endpoint string) (*Driver, error) {
@@ -60,15 +65,6 @@ func (d *Driver) NewNodeServer() *Nodeserver {
 func (d *Driver) Run(ctx context.Context) error {
 	log.Printf("Driver: %s", DriverName)
 	log.Printf("Version: %s", VendorVersion)
-
-	_, span := otel.Tracer(DriverName).Start(ctx, "Run",
-		trace.WithAttributes(
-			attribute.String("driver.name", DriverName),
-			attribute.String("driver.version", VendorVersion),
-		),
-		trace.WithSpanKind(trace.SpanKindInternal),
-	)
-	defer span.End()
 
 	d.Driver.AddControllerServiceCapabilities([]csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,

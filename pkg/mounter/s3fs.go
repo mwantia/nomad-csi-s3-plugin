@@ -50,17 +50,12 @@ func (s *S3FSMounter) Stage(ctx context.Context, stagePath string) error {
 
 	span.SetAttributes(attribute.String("passfile", passfile))
 
-	region := s.Cfg.Region
-	if len(region) <= 0 {
-		region = "us-east-1"
-	}
-
 	return FuseMount(ctx, stagePath, "s3fs", []string{
 		fmt.Sprintf("%s:/%s", s.Meta.BucketName, path.Join(s.Meta.Prefix, s.Meta.FSPath)),
 		stagePath,
-		"-o", fmt.Sprintf("url=%s", s.Cfg.Endpoint),
-		"-o", fmt.Sprintf("endpoint=%s", region),
-		"-o", fmt.Sprintf("passwd_file=%s", passfile),
+		"-o", fmt.Sprintf("url=\"%s\"", s.Cfg.Endpoint),
+		"-o", fmt.Sprintf("endpoint=\"%s\"", s.Cfg.Region),
+		"-o", fmt.Sprintf("passwd_file=\"%s\"", passfile),
 		"-o", "use_path_request_style",
 		"-o", "allow_other",
 		"-o", "mp_umask=000",
@@ -95,7 +90,7 @@ func (s *S3FSMounter) Unstage(ctx context.Context, stagePath string) error {
 }
 
 func (s *S3FSMounter) Mount(ctx context.Context, source string, target string) error {
-	_, span := otel.Tracer(DriverName).Start(ctx, "Mount",
+	ctx, span := otel.Tracer(DriverName).Start(ctx, "Mount",
 		trace.WithAttributes(
 			attribute.String("type", "s3fs"),
 			attribute.String("source", source),
@@ -110,11 +105,14 @@ func (s *S3FSMounter) Mount(ctx context.Context, source string, target string) e
 	)
 	defer span.End()
 
-	if err := mount.New("").Mount(source, target, "", []string{"bind"}); err != nil {
-		return common.HandleInternalError(err, span)
-	}
+	return FuseMount(ctx, target, "bindfs", []string{
+		source,
+		target,
+	})
 
-	return nil
+	/* if err := mount.New("").Mount(source, target, "", []string{}); err != nil {
+		return common.HandleInternalError(err, span)
+	} */
 }
 
 func (s *S3FSMounter) Unmount(ctx context.Context, target string) error {

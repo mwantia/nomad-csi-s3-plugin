@@ -345,6 +345,7 @@ func (c *S3Client) GetFSMeta(ctx context.Context, bucketName, prefix string) (*F
 		trace.WithAttributes(
 			attribute.String("endpoint", c.Config.Endpoint),
 			attribute.String("region", c.Config.Region),
+			attribute.String("bucketName", bucketName),
 			attribute.String("path", path.Join(prefix, MetadataName)),
 		),
 		trace.WithSpanKind(trace.SpanKindClient),
@@ -354,32 +355,34 @@ func (c *S3Client) GetFSMeta(ctx context.Context, bucketName, prefix string) (*F
 	opts := minio.GetObjectOptions{}
 	obj, err := c.Minio.GetObject(ctx, bucketName, path.Join(prefix, MetadataName), opts)
 	if err != nil {
-		return &FSMeta{}, common.HandleInternalError(err, span)
+		return &FSMeta{}, common.HandleError(err, span)
 	}
 
 	objInfo, err := obj.Stat()
 	if err != nil {
-		return &FSMeta{}, common.HandleInternalError(err, span)
+		return &FSMeta{}, common.HandleError(err, span)
+	}
+
+	span.SetAttributes(attribute.Int64("objsize", objInfo.Size))
+
+	if objInfo.Size <= 0 {
+		return &FSMeta{}, common.HandleError(fmt.Errorf("invalid size defined for object"), span)
 	}
 
 	b := make([]byte, objInfo.Size)
 	_, err = obj.Read(b)
 
 	if err != nil && err != io.EOF {
-		return &FSMeta{}, common.HandleInternalError(err, span)
+		return &FSMeta{}, common.HandleError(err, span)
 	}
 
 	var meta FSMeta
 	err = json.Unmarshal(b, &meta)
 
-	span.SetAttributes(
-		attribute.String("bucketname", meta.BucketName),
-		attribute.String("prefix", meta.Prefix),
-		attribute.String("fspath", meta.FSPath),
-	)
+	span.SetAttributes(attribute.String("fspath", meta.FSPath))
 
 	if err != nil {
-		return &FSMeta{}, common.HandleInternalError(err, span)
+		return &FSMeta{}, common.HandleError(err, span)
 	}
 
 	return &meta, nil

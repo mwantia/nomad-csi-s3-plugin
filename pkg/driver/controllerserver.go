@@ -222,13 +222,15 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 	)
 	defer span.End()
 
+	volcaps := req.GetVolumeCapabilities()
+
 	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	if len(req.GetVolumeId()) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume ID missing in request", span)
 	}
 
-	if req.GetVolumeCapabilities() == nil {
+	if len(volcaps) == 0 {
 		return nil, common.HandleInvalidArgumentError("Volume capabilities missing in request", span)
 	}
 
@@ -265,25 +267,18 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 		return nil, common.HandleError(err, span)
 	}
 
-	// We currently only support RWO
-	supportedAccessMode := &csi.VolumeCapability_AccessMode{
-		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+	var confirmed *csi.ValidateVolumeCapabilitiesResponse_Confirmed
+	ok, err := HasVolumeCapabilitiesSupport(volcaps)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, capability := range req.VolumeCapabilities {
-		if capability.GetAccessMode().GetMode() != supportedAccessMode.GetMode() {
-			return &csi.ValidateVolumeCapabilitiesResponse{Message: "Only single node writer is supported"}, nil
-		}
+	if ok {
+		confirmed = &csi.ValidateVolumeCapabilitiesResponse_Confirmed{VolumeCapabilities: volcaps}
 	}
 
 	return &csi.ValidateVolumeCapabilitiesResponse{
-		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
-			VolumeCapabilities: []*csi.VolumeCapability{
-				{
-					AccessMode: supportedAccessMode,
-				},
-			},
-		},
+		Confirmed: confirmed,
 	}, nil
 }
 
@@ -299,4 +294,34 @@ func (c *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 	log.Printf("TraceID: %s", span.SpanContext().TraceID().String())
 
 	return &csi.ControllerExpandVolumeResponse{}, common.HandleUnimplementedError("ControllerExpandVolume", span)
+}
+
+func HasVolumeCapabilitiesSupport(volcaps []*csi.VolumeCapability) (bool, error) {
+	supports := func(cap *csi.VolumeCapability) bool {
+		switch cap.GetAccessType().(type) {
+		case *csi.VolumeCapability_Mount:
+			break
+		case *csi.VolumeCapability_Block:
+			return false
+		default:
+			return false
+		}
+
+		for _, vs := range VolumeCapabilities {
+			if vs.GetMode() == cap.AccessMode.GetMode() {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	match := true
+	for _, vs := range volcaps {
+		if !supports(vs) {
+			match = false
+		}
+	}
+
+	return match, nil
 }

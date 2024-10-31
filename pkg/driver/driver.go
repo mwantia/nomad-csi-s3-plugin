@@ -7,6 +7,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/config"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/controller"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/identity"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/node"
@@ -14,6 +15,7 @@ import (
 
 type Driver struct {
 	Driver           *csicommon.CSIDriver
+	Cfg              *config.DriverConfig
 	Endpoint         string
 	IdentityServer   *identity.IdentityServer
 	NodeServer       *node.Nodeserver
@@ -21,7 +23,7 @@ type Driver struct {
 }
 
 var (
-	VendorVersion = "v1.0.1"
+	VendorVersion = "v1.0.4"
 	DriverName    = "github.com.mwantia.nomad-csi-s3-plugin"
 )
 
@@ -33,26 +35,30 @@ func New(node string, endpoint string) (*Driver, error) {
 	}
 
 	return &Driver{
-		Endpoint: endpoint,
 		Driver:   d,
+		Cfg:      &config.DriverConfig{},
+		Endpoint: endpoint,
 	}, nil
 }
 
 func (d *Driver) NewIdentityServer() *identity.IdentityServer {
 	return &identity.IdentityServer{
 		DefaultIdentityServer: csicommon.NewDefaultIdentityServer(d.Driver),
+		Cfg:                   d.Cfg,
 	}
 }
 
 func (d *Driver) NewControllerServer() *controller.ControllerServer {
 	return &controller.ControllerServer{
 		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.Driver),
+		Cfg:                     d.Cfg,
 	}
 }
 
 func (d *Driver) NewNodeServer() *node.Nodeserver {
 	return &node.Nodeserver{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.Driver),
+		Cfg:               d.Cfg,
 		Mutexes:           common.NewKeyMutex(32),
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/config"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,6 +31,7 @@ var VolumeCapabilities = []csi.VolumeCapability_AccessMode{
 
 type ControllerServer struct {
 	*csicommon.DefaultControllerServer
+	Cfg *config.DriverConfig
 }
 
 func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -85,7 +87,7 @@ func (c *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		FSPath:        defaultFsPath,
 	}
 
-	client, err := s3.NewClientFromSecret(req.GetSecrets())
+	client, err := s3.CreateClient(c.Cfg, req.GetSecrets())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize S3 client: %s", err)
 	}
@@ -148,7 +150,7 @@ func (c *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 
 	log.Printf("Deleting volume %s", req.GetVolumeId())
 
-	client, err := s3.NewClientFromSecret(req.GetSecrets())
+	client, err := s3.CreateClient(c.Cfg, req.GetSecrets())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize S3 client: %s", err)
 	}
@@ -205,7 +207,7 @@ func (c *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *
 
 	bucketName, prefix := common.VolumeIDToBucketPrefix(req.GetVolumeId())
 
-	client, err := s3.NewClientFromSecret(req.GetSecrets())
+	client, err := s3.CreateClient(c.Cfg, req.GetSecrets())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize S3 client: %s", err)
 	}

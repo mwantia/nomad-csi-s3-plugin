@@ -1,0 +1,6 @@
+aliases:
+  - name: minio
+    endpoint: http://minio:9000
+    region: ""
+    accessKeyID: minioadmin
+    secretAccessKey: minioadmin

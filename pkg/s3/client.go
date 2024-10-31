@@ -9,9 +9,11 @@ import (
 	"log"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/config"
 )
 
 const (
@@ -24,10 +26,10 @@ type S3Client struct {
 }
 
 type S3Config struct {
+	Endpoint        string `json:"endpoint"`
+	Region          string `json:"region"`
 	AccessKeyID     string `json:"accesskey"`
 	SecretAccessKey string `json:"secretkey"`
-	Region          string `json:"region"`
-	Endpoint        string `json:"endpoint"`
 	Mounter         string `json:"mounter"`
 }
 
@@ -40,7 +42,7 @@ type FSMeta struct {
 	CapacityBytes int64  `json:"capacitybytes"`
 }
 
-func NewClientFromConfig(cfg *S3Config) (*S3Client, error) {
+func CreateClientFromConfig(cfg *S3Config) (*S3Client, error) {
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil {
 		return nil, err
@@ -65,12 +67,30 @@ func NewClientFromConfig(cfg *S3Config) (*S3Client, error) {
 	}, nil
 }
 
-func NewClientFromSecret(secret map[string]string) (*S3Client, error) {
-	return NewClientFromConfig(&S3Config{
+func CreateClient(cfg *config.DriverConfig, secret map[string]string) (*S3Client, error) {
+	alias := secret["alias"]
+
+	if strings.TrimSpace(alias) != "" {
+		if cfg != nil {
+			a, ok := cfg.GetAlias(alias)
+			if ok {
+				return CreateClientFromConfig(&S3Config{
+					Endpoint:        a.Endpoint,
+					Region:          a.Region,
+					AccessKeyID:     a.AccessKeyID,
+					SecretAccessKey: a.SecretAccessKey,
+				})
+			}
+		}
+
+		log.Printf("unable to create client based on the provided alias '%s'", alias)
+	}
+
+	return CreateClientFromConfig(&S3Config{
+		Endpoint:        secret["endpoint"],
+		Region:          secret["region"],
 		AccessKeyID:     secret["accessKeyID"],
 		SecretAccessKey: secret["secretAccessKey"],
-		Region:          secret["region"],
-		Endpoint:        secret["endpoint"],
 	})
 }
 

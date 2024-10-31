@@ -9,6 +9,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/kubernetes-csi/drivers/pkg/csi-common"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common"
+	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/config"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/common/mount"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/mounter"
 	"github.com/mwantia/nomad-csi-s3-plugin/pkg/s3"
@@ -18,6 +19,7 @@ import (
 
 type Nodeserver struct {
 	*csicommon.DefaultNodeServer
+	Cfg        *config.DriverConfig
 	Volumes    sync.Map
 	Mutexes    *common.KeyMutex
 	Verifiers  map[string]*mount.MountVerifier
@@ -136,7 +138,7 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
-	minio, err := s3.NewClientFromSecret(req.GetSecrets())
+	minio, err := s3.CreateClient(n.Cfg, req.GetSecrets())
 	if err != nil {
 		return nil, err
 	}

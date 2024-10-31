@@ -43,7 +43,7 @@ func (n *Nodeserver) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
-	isMountable, err := common.CheckMount(req.GetTargetPath())
+	isMountable, err := mount.CheckMount(req.GetTargetPath())
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (n *Nodeserver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	isMountable, err := common.CheckMount(stagingpath)
+	isMountable, err := mount.CheckMount(stagingpath)
 	if err != nil {
 		return nil, err
 	}

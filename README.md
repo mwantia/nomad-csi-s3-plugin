@@ -4,6 +4,12 @@
 
 A Container Storage Interface (CSI) plugin that allows the use of S3-compatible storages as persistent volumes in Nomad clusters.
 
+> This project started after looking for a solution to deploy s3 buckets as filesystem for my nomad cluster. \
+> The first and at the time most promising project was [https://github.com/ctrox/csi-s3](github.com/ctrox/csi-s3). \
+> Which worked, but seemed to have been abandoned with some remaining pull requests and problems that don't seem to get fixed any time soon.
+>
+> With that said, I used the original project as base, adjusted it and implemented some fixes already mentioned in the pull requests.
+
 ## Overview
 
 This plugin enables you to:

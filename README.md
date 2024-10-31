@@ -13,6 +13,66 @@ This plugin enables you to:
 - Use shared storage across multiple nodes
 - Configure access through credentials or aliases
 
+## Architecture
+
+```mermaid
+sequenceDiagram
+    participant Nomad
+    participant CSIDriver as CSI Driver
+    participant Controller as Controller Server
+    participant Node as Node Server
+    participant S3Client as S3 Client
+    participant S3Storage as S3 Storage
+    participant Mounter as S3FS Mounter
+
+    %% Volume Creation
+    Nomad->>CSIDriver: CreateVolume Request
+    CSIDriver->>Controller: Forward Request
+    Controller->>S3Client: Create S3 Client
+    S3Client->>S3Storage: Check Bucket Exists
+    S3Client->>S3Storage: Create Bucket (if needed)
+    S3Client->>S3Storage: Create Prefix
+    S3Client->>S3Storage: Set FSMeta
+    Controller-->>Nomad: Volume Created Response
+
+    %% Volume Stage
+    Nomad->>CSIDriver: NodeStageVolume Request
+    CSIDriver->>Node: Forward Request
+    Node->>S3Client: Create S3 Client
+    Node->>S3Client: Get FSMeta
+    Node->>Mounter: Create Mounter (s3fs)
+    Mounter->>S3Storage: Mount S3 Bucket
+    Note over Mounter,S3Storage: Uses s3fs to mount bucket
+    Node-->>Nomad: Volume Staged Response
+
+    %% Volume Publish
+    Nomad->>CSIDriver: NodePublishVolume Request
+    CSIDriver->>Node: Forward Request
+    Node->>Mounter: Mount Volume
+    Note over Node,Mounter: Bind mount from staged path
+    Node-->>Nomad: Volume Published Response
+
+    %% Volume Unpublish
+    Nomad->>CSIDriver: NodeUnpublishVolume Request
+    CSIDriver->>Node: Forward Request
+    Node->>Mounter: Unmount Volume
+    Node-->>Nomad: Volume Unpublished Response
+
+    %% Volume Unstage
+    Nomad->>CSIDriver: NodeUnstageVolume Request
+    CSIDriver->>Node: Forward Request
+    Node->>Mounter: Unmount S3
+    Node-->>Nomad: Volume Unstaged Response
+
+    %% Volume Delete
+    Nomad->>CSIDriver: DeleteVolume Request
+    CSIDriver->>Controller: Forward Request
+    Controller->>S3Client: Create S3 Client
+    S3Client->>S3Storage: Get FSMeta
+    S3Client->>S3Storage: Remove Bucket/Prefix
+    Controller-->>Nomad: Volume Deleted Response
+```
+
 ## Prerequisites
 
 - Nomad 1.3.0 or later

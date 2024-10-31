@@ -6,11 +6,11 @@ import (
 )
 
 type Alias struct {
-	Name            string `yaml:"name"`
-	Endpoint        string `yaml:"endpoint"`
-	Region          string `yaml:"region"`
-	AccessKeyID     string `yaml:"accessKeyID"`
-	SecretAccessKey string `yaml:"secretAccessKey"`
+	Name            string `mapstructure:"name"`
+	Endpoint        string `mapstructure:"endpoint"`
+	Region          string `mapstructure:"region"`
+	AccessKeyID     string `mapstructure:"accessKeyID"`
+	SecretAccessKey string `mapstructure:"secretAccessKey"`
 }
 
 func (c *DriverConfig) GetAlias(name string) (*Alias, bool) {

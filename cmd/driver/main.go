@@ -23,19 +23,13 @@ var (
 
 func main() {
 	flag.Parse()
-
 	d, err := driver.New(*NodeID, *Endpoint)
 	if err != nil {
-		panic(err)
+		log.Fatalf("unable to create driver: %v", err)
 	}
 
 	if strings.TrimSpace(*Config) != "" {
-		data, err := os.ReadFile(*Config)
-		if err != nil {
-			log.Printf("unable to load config from '%s': %v", *Config, err)
-		}
-
-		cfg, err := config.LoadDriverConfig(data)
+		cfg, err := config.LoadDriverConfig(*Config)
 		if err != nil {
 			log.Printf("failed to load config: %v", err)
 		}
@@ -46,7 +40,7 @@ func main() {
 	ctx := context.Background()
 
 	if err = d.Run(ctx); err != nil {
-		log.Printf("Unable to start driver: %v", err)
+		log.Printf("unable to start driver: %v", err)
 	}
 
 	os.Exit(0)

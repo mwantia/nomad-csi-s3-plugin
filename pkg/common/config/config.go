@@ -2,19 +2,51 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"reflect"
+	"strings"
 
-	"gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 type DriverConfig struct {
-	Aliases []Alias `yaml:"aliases"`
+	Aliases []Alias `mapstructure:"aliases"`
 }
 
-func LoadDriverConfig(data []byte) (*DriverConfig, error) {
+func LoadDriverConfig(path string) (*DriverConfig, error) {
+	v := viper.New()
+
+	v.SetConfigFile(path)
+	v.SetEnvPrefix("")
+	v.AutomaticEnv()
+	v.AllowEmptyEnv(true)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.SetConfigType("yaml")
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
 	cfg := &DriverConfig{}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return cfg, fmt.Errorf("failed to parse config: %w", err)
+	if err := v.Unmarshal(cfg, viper.DecodeHook(func(src, dst reflect.Type, data interface{}) (interface{}, error) {
+		if src.Kind() != reflect.String {
+			return data, nil
+		}
+
+		str := data.(string)
+		if strings.Contains(str, "${") || strings.HasPrefix(str, "$") {
+
+			envVar := strings.Trim(str, "${}")
+			envVar = strings.TrimPrefix(envVar, "$")
+
+			if value, exists := os.LookupEnv(envVar); exists {
+				return value, nil
+			}
+		}
+		return data, nil
+	})); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {

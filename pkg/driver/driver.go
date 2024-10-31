@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -30,7 +31,7 @@ var (
 func New(node string, endpoint string) (*Driver, error) {
 	d := csicommon.NewCSIDriver(DriverName, VendorVersion, node)
 	if d == nil {
-		log.Fatalf("Failed to initialize CSI driver '%s' with version '%s' on node '%s' and endpoint '%s'",
+		return nil, fmt.Errorf("failed to initialize CSI driver '%s' with version '%s' on node '%s' and endpoint '%s'",
 			DriverName, VendorVersion, node, endpoint)
 	}
 

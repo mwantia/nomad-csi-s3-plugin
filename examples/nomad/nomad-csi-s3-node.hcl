@@ -9,11 +9,6 @@ job "nomad-csi-s3-node" {
         value     = "linux"
     }
 
-    constraint {
-        attribute = "${attr.cpu.arch}"
-        value     = "amd64"
-    }
-
     group "controllers" {
         count = 1
 
@@ -27,8 +22,9 @@ job "nomad-csi-s3-node" {
             config {
                 image      = "mwantia/nomad-csi-s3-plugin:latest"
                 args       = [
-                    "--endpoint=unix://csi/csi.sock",
-                    "--nodeid=${node.unique.name}",
+                    "--endpoint=unix://csi/csi.sock", 
+                    "--nodeid=${node.unique.name}", 
+                    "--config=/secrets/config.yml"
                 ]
                 privileged = true
             }
@@ -37,6 +33,18 @@ job "nomad-csi-s3-node" {
                 id        = "nomad-csi-s3-plugin"
                 type      = "node"
                 mount_dir = "/csi"
+            }
+
+            template {
+                data        = <<-EOH
+                aliases:
+                  - name: minio
+                    endpoint: http://minio:9000
+                    accessKeyID: minioadmin
+                    secretAccessKey: minioadmin
+                EOH
+                change_mode = "noop"
+                destination = "secrets/config.yml"
             }
 
             resources {

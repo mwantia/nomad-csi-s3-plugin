@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/url"
 	"path"
-	"strings"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -68,12 +67,9 @@ func CreateClientFromConfig(cfg *S3Config) (*S3Client, error) {
 }
 
 func CreateClient(cfg *config.DriverConfig, secret map[string]string) (*S3Client, error) {
-	alias := secret["alias"]
-
-	if strings.TrimSpace(alias) != "" {
+	if alias, ok := secret["alias"]; ok {
 		if cfg != nil {
-			a, ok := cfg.GetAlias(alias)
-			if ok {
+			if a, ok := cfg.GetAlias(alias); ok {
 				return CreateClientFromConfig(&S3Config{
 					Endpoint:        a.Endpoint,
 					Region:          a.Region,
